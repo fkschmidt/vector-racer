@@ -732,7 +732,7 @@ export class GameView {
         ? `<circle class="choice-dot" cx="${x}" cy="${y}" r=".14" />`
         : `<path class="choice-plus" d="M${x - .22} ${y}h.44 M${x} ${y - .22}v.44" />`
       const label = setup ? 'Choose starting position' : kind === 'crash' ? 'Crash and take penalty' : 'Move'
-      return `<g class="move-choice ${kind === 'crash' ? 'move-crash' : 'move-legal'}" data-x="${point.x}" data-y="${point.y}" tabindex="0" role="button" aria-label="${label} to ${point.x}, ${point.y}"><circle class="choice-hit" cx="${x}" cy="${y}" r=".58" />${marker}</g>`
+      return `<g class="move-choice ${kind === 'crash' ? 'move-crash' : 'move-legal'}" data-x="${point.x}" data-y="${point.y}" tabindex="0" role="button" aria-label="${label} to ${point.x}, ${point.y}"><circle class="choice-hit" cx="${x}" cy="${y}" r=".58" /><circle class="choice-ring" cx="${x}" cy="${y}" r=".34" />${marker}</g>`
     }).join('')
   }
 
