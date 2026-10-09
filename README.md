@@ -15,6 +15,10 @@ You don't steer the car directly. Each turn your car carries on with the speed a
 3. **Stay on the road.** You may touch the edge of the track or run along it, but not go through it.
 4. **Finish the lap.** The first driver to drive a full lap and cross the start/finish line wins.
 
+### On a phone
+
+On a small screen the board zooms in on the car that is about to move, so the points are large enough to tap. "Show whole track" under the board switches to the full circuit and "Zoom to car" switches back. The same button works on a large screen, where the board starts out whole.
+
 ### Crashing
 
 If you pick a point that takes you off the road, you crash: your car stays where it is, you miss your next two turns, and then you restart from a standstill. Sometimes every option is a crash. Then you have to take one, and you should have braked earlier.

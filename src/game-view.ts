@@ -35,6 +35,15 @@ export type ViewActions = {
 
 const BOARD_EDGE_INSET = .3
 const COPIED_NOTICE_TIME = 1600
+const NARROW_SCREEN = '(max-width: 680px)'
+// Zoomed in, the board shows this many grid units around the points that matter, and never fewer than the minimum.
+const ZOOM_MARGIN = 2.5
+const ZOOM_MIN_SIZE = 12
+const ZOOM_EDGE_OVERHANG = .5
+const ZOOM_TIME = 260
+
+type ViewBox = { x: number; y: number; width: number; height: number }
+const WHOLE_BOARD: ViewBox = { x: 0, y: 0, width: BOARD.width, height: BOARD.height }
 
 export class GameView {
   private readonly board: SVGSVGElement
@@ -73,6 +82,7 @@ export class GameView {
   private readonly eventFeed: HTMLOListElement
   private readonly feedCount: HTMLSpanElement
   private readonly crashLegend: HTMLSpanElement
+  private readonly zoomToggle: HTMLButtonElement
   private readonly replayControls: HTMLDivElement
   private readonly replayOpen: HTMLButtonElement
   private readonly replayPrevious: HTMLButtonElement
@@ -84,6 +94,11 @@ export class GameView {
   private readonly newRaceButton: HTMLButtonElement
   private actions: ViewActions | null = null
   private copiedTimer: number | null = null
+  // Phones start zoomed in, because the whole circuit leaves the move markers too small to tap.
+  private zoomed = window.matchMedia(NARROW_SCREEN).matches
+  private focusPoints: Point[] | null = null
+  private viewBox = WHOLE_BOARD
+  private zoomFrame: number | null = null
 
   constructor(root: HTMLDivElement) {
     const trackOptions = TRACKS.map((track) => `<option value="${track.id}">${track.name}</option>`).join('')
@@ -144,6 +159,7 @@ export class GameView {
             <div class="board-legend">
               <span><i class="legend-dot legend-legal"></i> LEGAL MOVE</span>
               <span id="crash-legend"><i class="legend-dot legend-crash"></i> CRASH / 2-TURN PENALTY</span>
+              <button id="zoom-toggle" class="zoom-toggle" type="button"></button>
             </div>
             <div id="replay-controls" class="replay-controls" hidden>
               <span class="replay-label">RACE REPLAY</span>
@@ -219,6 +235,7 @@ export class GameView {
     this.eventFeed = root.querySelector<HTMLOListElement>('#event-feed')!
     this.feedCount = root.querySelector<HTMLSpanElement>('#feed-count')!
     this.crashLegend = root.querySelector<HTMLSpanElement>('#crash-legend')!
+    this.zoomToggle = root.querySelector<HTMLButtonElement>('#zoom-toggle')!
     this.replayControls = root.querySelector<HTMLDivElement>('#replay-controls')!
     this.replayOpen = root.querySelector<HTMLButtonElement>('#replay-open')!
     this.replayPrevious = root.querySelector<HTMLButtonElement>('#replay-previous')!
@@ -273,6 +290,11 @@ export class GameView {
     this.replayToggle.addEventListener('click', actions.onToggleReplay)
     this.replayRange.addEventListener('input', () => actions.onSeekReplay(Number(this.replayRange.value)))
     this.championshipButton.addEventListener('click', actions.onChampionshipAction)
+    this.zoomToggle.addEventListener('click', () => {
+      this.zoomed = !this.zoomed
+      this.updateZoom(true)
+    })
+    window.addEventListener('resize', () => this.updateZoom(false))
     this.onlineCopy.addEventListener('click', this.copyOnlineLink)
     this.onlineLink.addEventListener('focus', () => this.onlineLink.select())
     this.onlineReplyForm.addEventListener('submit', (event) => {
@@ -399,6 +421,17 @@ export class GameView {
     this.renderDrivers(state, racers, currentIndex, phase, computerPlayerId, onlineConnected ? localRacerId : null)
     this.renderBoard(state, racers, phase, computerThinking || awaitingOpponent ? [] : candidates, replay !== null)
     this.updateReplayControls(state, replay, replayFrameCount, replayPlaying, computerThinking)
+
+    // The zoomed board follows the person at this device: their own car against the computer or online,
+    // and whoever is to move when the device is shared.
+    const viewerId = computerPlayerId !== null ? 1 : onlineConnected ? localRacerId : racer.id
+    const viewer = racers.find(({ id }) => id === viewerId) ?? racer
+    const overview = replay !== null || phase === 'finished' || (onlineRace !== null && !onlineConnected)
+    this.focusPoints = overview ? null : phase === 'setup'
+      ? state.track.startLine.positions.map(({ point }) => point)
+      : this.pointsAhead(viewer)
+    this.updateZoom(true)
+
     // The host chooses the circuit and starts each race, so the guest's controls stay locked while a race is on.
     if (onlineRace?.role === 'guest' && ['preparing', 'reply', 'connected'].includes(onlineRace.stage)) {
       this.trackSelect.disabled = true
@@ -590,6 +623,75 @@ export class GameView {
       <g class="race-trails">${visibleRacers.map((racer) => this.drawRacer(racer)).join('')}</g>
       <g class="move-choices">${startChoices}</g>
     `
+  }
+
+  // The car, the nine points it can choose between, and where it would be a move later at this speed.
+  private pointsAhead({ position, velocity }: Racer): Point[] {
+    const projected = { x: position.x + velocity.x, y: position.y + velocity.y }
+    return [
+      position,
+      { x: projected.x - 1, y: projected.y - 1 },
+      { x: projected.x + 1, y: projected.y + 1 },
+      { x: projected.x + velocity.x, y: projected.y + velocity.y },
+    ]
+  }
+
+  private zoomBox(points: Point[]): ViewBox {
+    const narrow = window.matchMedia(NARROW_SCREEN).matches
+    // A phone held upright gets a square view, which shows as much road ahead of a car driving up or down as sideways.
+    const aspect = narrow ? 1 : BOARD.width / BOARD.height
+    const xs = points.map(({ x }) => Math.max(0, Math.min(BOARD.width, x)))
+    const ys = points.map(({ y }) => Math.max(0, Math.min(BOARD.height, y)))
+    const [left, right, top, bottom] = [Math.min(...xs), Math.max(...xs), Math.min(...ys), Math.max(...ys)]
+    const height = Math.min(
+      BOARD.height,
+      Math.max(ZOOM_MIN_SIZE, bottom - top + ZOOM_MARGIN * 2, (right - left + ZOOM_MARGIN * 2) / aspect),
+    )
+    const width = height * aspect
+    if (width >= BOARD.width) return WHOLE_BOARD
+    // Markers on the outermost grid lines need a little room beyond the board to stay tappable.
+    const place = (centre: number, size: number, limit: number): number => {
+      return Math.max(-ZOOM_EDGE_OVERHANG, Math.min(limit + ZOOM_EDGE_OVERHANG - size, centre - size / 2))
+    }
+    return { x: place((left + right) / 2, width, BOARD.width), y: place((top + bottom) / 2, height, BOARD.height), width, height }
+  }
+
+  private updateZoom(animate: boolean): void {
+    const target = this.zoomed && this.focusPoints ? this.zoomBox(this.focusPoints) : WHOLE_BOARD
+    this.zoomToggle.textContent = this.zoomed ? 'Show whole track' : 'Zoom to car'
+    this.zoomToggle.setAttribute('aria-pressed', String(this.zoomed))
+    this.zoomToggle.disabled = this.focusPoints === null
+    this.board.classList.toggle('board-zoomed', target !== WHOLE_BOARD)
+
+    if (this.zoomFrame !== null) window.cancelAnimationFrame(this.zoomFrame)
+    this.zoomFrame = null
+    const from = this.viewBox
+    const sameShape = Math.abs(from.width / from.height - target.width / target.height) < .001
+    if (!animate || !sameShape || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      this.showViewBox(target)
+      return
+    }
+
+    const started = performance.now()
+    const step = (now: number): void => {
+      const progress = Math.min(1, (now - started) / ZOOM_TIME)
+      const eased = 1 - (1 - progress) ** 3
+      const between = (start: number, end: number): number => start + (end - start) * eased
+      this.showViewBox({
+        x: between(from.x, target.x),
+        y: between(from.y, target.y),
+        width: between(from.width, target.width),
+        height: between(from.height, target.height),
+      })
+      this.zoomFrame = progress < 1 ? window.requestAnimationFrame(step) : null
+    }
+    this.zoomFrame = window.requestAnimationFrame(step)
+  }
+
+  private showViewBox(box: ViewBox): void {
+    this.viewBox = box
+    this.board.setAttribute('viewBox', `${box.x} ${box.y} ${box.width} ${box.height}`)
+    this.board.style.aspectRatio = String(box.width / box.height)
   }
 
   private pathForLine(points: Point[]): string {

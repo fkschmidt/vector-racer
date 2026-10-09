@@ -123,9 +123,13 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
 .choice-dot { fill: #d5533d; stroke: #fffdf4; stroke-width: 1.5px; vector-effect: non-scaling-stroke; }
 .move-legal:hover .choice-plus, .move-legal:focus .choice-plus { stroke: #174b43; stroke-width: 2.6px; }
 .move-crash:hover .choice-dot, .move-crash:focus .choice-dot { fill: #a63e30; r: .18; }
-.board-legend { display: flex; gap: 20px; padding: 13px 2px 0; color: #6c7b73; }
+.board-legend { display: flex; align-items: center; gap: 20px; padding: 9px 2px 0; color: #6c7b73; }
 .board-legend > span { display: flex; align-items: center; gap: 7px; }
 .board-legend > span[hidden] { display: none; }
+#race-board.board-zoomed { overflow: hidden; }
+.zoom-toggle { margin-left: auto; min-height: 32px; padding: 0 12px; border: 1px solid #b9c9be; border-radius: 3px; color: var(--forest); background: rgba(248, 248, 241, .75); cursor: pointer; font-family: 'Space Grotesk', 'Avenir Next', sans-serif; font-size: 12px; font-weight: 600; letter-spacing: 0; }
+.zoom-toggle:hover:not(:disabled) { background: #fff; }
+.zoom-toggle:disabled { opacity: .45; cursor: not-allowed; }
 .legend-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
 .legend-legal { background: #227c68; }
 .legend-crash { background: #d5533d; }
