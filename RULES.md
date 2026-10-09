@@ -58,6 +58,10 @@ The game ships with eleven circuits, in this order. All run clockwise unless not
 
 - A race has two, three or four players.
 - Players are numbered from 1 and take turns in that order for the whole race.
+- Each player number has a classic driver's name and colour: 1 Senna (yellow), 2 Prost (blue), 3 Schumacher (red), 4 Clark (green).
+- Against the computer, including the championship, the person's car is not a classic driver's: it is named PLAYERONE and is violet. The computer drives as one of the four classic drivers, with that driver's colour, chosen at random for every race.
+- Against the computer and online, a person can enter a name of their own. It replaces the name on their car; the colour stays. Online, each player sees the other's name. In local mode there is no name field, because the device is shared.
+- A name is shown in capitals and holds at most 12 characters: letters, digits, spaces, full stops, hyphens and underscores. Anything else is removed, also from a name received from the other player. An empty name brings back the default. The name is remembered on the device.
 
 ## 4. Setting up the grid
 

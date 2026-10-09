@@ -1,3 +1,4 @@
+import { cleanDriverName } from './game.ts'
 import type { Point } from './tracks.ts'
 
 export type OnlineMessage =
@@ -5,6 +6,8 @@ export type OnlineMessage =
   | { type: 'new-race'; race: number; trackId: string }
   // One selected point: a start position or a move. `turn` counts the selections in this race.
   | { type: 'move'; race: number; turn: number; point: Point }
+  // The sender's driver name. Empty means they have not chosen one.
+  | { type: 'name'; name: string }
 
 export type ConnectionEvents = {
   onOpen(): void
@@ -35,7 +38,8 @@ export function parseOnlineMessage(data: unknown): OnlineMessage | null {
   }
   if (typeof message !== 'object' || message === null) return null
 
-  const { type, race, trackId, turn, point } = message as Record<string, unknown>
+  const { type, race, trackId, turn, point, name } = message as Record<string, unknown>
+  if (type === 'name') return typeof name === 'string' ? { type, name: cleanDriverName(name) } : null
   if (!isCount(race)) return null
   if (type === 'new-race') {
     return typeof trackId === 'string' ? { type, race, trackId } : null

@@ -23,8 +23,32 @@ export type Candidate = {
 
 const BRIDGE_TRACK_STEP = .1
 const BORDER_CHECK_STEP = .25
-const DRIVER_COLORS = ['#d5533d', '#176f68', '#df9b18', '#4d69a7']
-const DRIVER_NAMES = ['CORAL', 'PINE', 'CITRON', 'INK']
+export type Driver = { name: string; color: string }
+
+// Four classic drivers, each in a colour they are remembered for: Senna's yellow helmet, Prost's French blue,
+// Schumacher's Ferrari red and Clark's British racing green.
+export const CLASSIC_DRIVERS: Driver[] = [
+  { name: 'SENNA', color: '#df9b18' },
+  { name: 'PROST', color: '#4d69a7' },
+  { name: 'SCHUMACHER', color: '#d5533d' },
+  { name: 'CLARK', color: '#176f68' },
+]
+// The person racing the computer. The colour is none of the classic drivers', so the computer can be any of them.
+export const PLAYER_DRIVER: Driver = { name: 'PLAYERONE', color: '#7a5ba8' }
+export const DRIVER_NAME_LENGTH = 12
+
+/**
+ * Turns typed or received text into a driver name: capitals, digits and a few separators only.
+ * Names are written straight into the page, so nothing that could act as markup may get through.
+ */
+export function cleanDriverName(text: string): string {
+  return text.toUpperCase()
+    .replace(/[^\p{L}\p{N} ._-]/gu, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, DRIVER_NAME_LENGTH)
+    .trim()
+}
 
 export function createRacers(count: number, track: Track = TRACKS[0]): Racer[] {
   return Array.from({ length: count }, (_, index) => {
@@ -33,8 +57,7 @@ export function createRacers(count: number, track: Track = TRACKS[0]): Racer[] {
     const velocity = { ...startingPosition.direction }
     return {
       id: index + 1,
-      name: DRIVER_NAMES[index],
-      color: DRIVER_COLORS[index],
+      ...CLASSIC_DRIVERS[index],
       position,
       velocity,
       trail: [{ from: { x: position.x - velocity.x, y: position.y - velocity.y }, to: { ...position } }],

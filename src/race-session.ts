@@ -1,6 +1,8 @@
 import {
+  cleanDriverName,
   crossesFinishLine,
   createRacers,
+  type Driver,
   getCandidates,
   hasLeftStartAfterMove,
   type Candidate,
@@ -63,6 +65,16 @@ export class RaceSession {
   startNewRace(count: number, track: Track): void {
     this.current = this.createState(count, track)
     this.frames = []
+  }
+
+  /** Changes who drives a car. A name with nothing displayable in it leaves the current name in place. */
+  setDriver(index: number, driver: Driver): void {
+    if (!this.current.racers[index]) return
+    const name = cleanDriverName(driver.name) || this.current.racers[index].name
+    for (const racers of [this.current.racers, ...this.frames.map((frame) => frame.racers)]) {
+      racers[index].name = name
+      racers[index].color = driver.color
+    }
   }
 
   getCandidates(): Candidate[] {

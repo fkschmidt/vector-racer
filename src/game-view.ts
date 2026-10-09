@@ -1,5 +1,5 @@
 import { BOARD, TRACKS, getRaceDirection, type Point } from './tracks.ts'
-import type { Candidate, Racer } from './game.ts'
+import { DRIVER_NAME_LENGTH, type Candidate, type Racer } from './game.ts'
 import type { OnlineRole, OnlineStage } from './online-race.ts'
 import type { RacePhase, RaceState, ReplayFrame } from './race-session.ts'
 import type { WorldCupStage } from './world-cup.ts'
@@ -31,6 +31,7 @@ export type ViewActions = {
   onSeekReplay(index: number): void
   onChampionshipAction(): void
   onSubmitReply(text: string): void
+  onChangeName(name: string): void
 }
 
 const BOARD_EDGE_INSET = .3
@@ -50,6 +51,8 @@ export class GameView {
   private readonly modeSelect: HTMLSelectElement
   private readonly modeLabel: HTMLSpanElement
   private readonly sessionStatus: HTMLSpanElement
+  private readonly nameField: HTMLDivElement
+  private readonly nameInput: HTMLInputElement
   private readonly trackSelect: HTMLSelectElement
   private readonly trackField: HTMLDivElement
   private readonly playerCountField: HTMLDivElement
@@ -116,6 +119,7 @@ export class GameView {
           <div><p class="eyebrow">PAPER GRID / CIRCUIT 01</p><h1>Make your <em>move.</em></h1></div>
           <div class="race-setup">
             <div class="setup-field mode-field"><label for="game-mode">MODE</label><select id="game-mode" aria-label="Game mode"><option value="local">LOCAL</option><option value="cpu">VS CPU</option><option value="championship">CHAMPIONSHIP</option><option value="online">ONLINE</option></select></div>
+            <div class="setup-field name-field"><label for="player-name">NAME</label><input id="player-name" type="text" maxlength="${DRIVER_NAME_LENGTH}" placeholder="YOUR NAME" aria-label="Your driver name" autocomplete="off" spellcheck="false" /></div>
             <div class="setup-field track-field"><label for="track-select">MAP</label><select id="track-select" aria-label="Choose race map">${trackOptions}</select></div>
             <div class="setup-field player-field"><label for="player-count">DRIVERS</label><select id="player-count" aria-label="Number of drivers"><option value="2" selected>02</option><option value="3">03</option><option value="4">04</option></select></div>
             <button id="new-race" class="new-race" type="button"><span aria-hidden="true">↻</span> New race</button>
@@ -203,6 +207,8 @@ export class GameView {
     this.modeSelect = root.querySelector<HTMLSelectElement>('#game-mode')!
     this.modeLabel = root.querySelector<HTMLSpanElement>('#mode-label')!
     this.sessionStatus = root.querySelector<HTMLSpanElement>('#session-status')!
+    this.nameField = root.querySelector<HTMLDivElement>('.name-field')!
+    this.nameInput = root.querySelector<HTMLInputElement>('#player-name')!
     this.trackSelect = root.querySelector<HTMLSelectElement>('#track-select')!
     this.trackField = root.querySelector<HTMLDivElement>('.track-field')!
     this.playerCountField = root.querySelector<HTMLDivElement>('.player-field')!
@@ -263,6 +269,10 @@ export class GameView {
     this.modeSelect.value = 'online'
   }
 
+  showPlayerName(name: string): void {
+    this.nameInput.value = name
+  }
+
   get isChampionshipMode(): boolean {
     return this.modeSelect.value === 'championship'
   }
@@ -283,6 +293,7 @@ export class GameView {
     this.newRaceButton.addEventListener('click', actions.onNewRace)
     this.playerCountSelect.addEventListener('change', actions.onNewRace)
     this.trackSelect.addEventListener('change', actions.onNewRace)
+    this.nameInput.addEventListener('change', () => actions.onChangeName(this.nameInput.value))
     this.replayOpen.addEventListener('click', actions.onOpenReplay)
     this.replayExit.addEventListener('click', actions.onCloseReplay)
     this.replayPrevious.addEventListener('click', () => actions.onStepReplay(-1))
@@ -740,6 +751,8 @@ export class GameView {
     this.trackField.hidden = this.isChampionshipMode
     this.playerCountSelect.disabled = replaying || this.isComputerMode || this.isOnlineMode
     this.playerCountField.hidden = this.isComputerMode || this.isOnlineMode
+    // One name per device: with a shared device there is no telling whose it would be.
+    this.nameField.hidden = !this.isComputerMode && !this.isOnlineMode
     this.newRaceButton.disabled = replaying
     this.replayRange.max = String(Math.max(0, replayFrameCount - 1))
     this.replayRange.value = String(replay?.index ?? 0)

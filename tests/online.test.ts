@@ -46,3 +46,12 @@ test('messages from the other player are read only when well formed', () => {
   assert.equal(parseOnlineMessage(JSON.stringify({ ...move, type: 'teleport' })), null)
   assert.equal(parseOnlineMessage(JSON.stringify({ type: 'new-race', race: 2 })), null)
 })
+
+test('a name from the other player is stripped of anything but plain text', () => {
+  const received = parseOnlineMessage(JSON.stringify({ type: 'name', name: '<img src=x onerror=alert(1)> Jörg' }))
+
+  assert.deepEqual(received, { type: 'name', name: 'IMG SRCX ONE' })
+  assert.deepEqual(parseOnlineMessage(JSON.stringify({ type: 'name', name: 'jörg-2' })), { type: 'name', name: 'JÖRG-2' })
+  assert.deepEqual(parseOnlineMessage(JSON.stringify({ type: 'name', name: '' })), { type: 'name', name: '' })
+  assert.equal(parseOnlineMessage(JSON.stringify({ type: 'name', name: 7 })), null)
+})

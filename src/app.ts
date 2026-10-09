@@ -1,5 +1,6 @@
 import './game.css'
 import { chooseComputerMove } from './computer-player.ts'
+import { CLASSIC_DRIVERS, cleanDriverName, PLAYER_DRIVER, type Driver } from './game.ts'
 import { GameView } from './game-view.ts'
 import type { OnlineMessage } from './online-connection.ts'
 import { decodeSignal } from './online-link.ts'
@@ -29,6 +30,43 @@ let onlineRaceNumber = 0
 let onlineTurn = 0
 let replyRejected = false
 let relayNotice: 'relayed' | 'relay-failed' | null = null
+const NAME_STORAGE_KEY = 'vector-racer-name'
+let playerName = cleanDriverName(readStoredName())
+let opponentName = ''
+let computerDriver: Driver = CLASSIC_DRIVERS[1]
+
+function readStoredName(): string {
+  try {
+    return window.localStorage.getItem(NAME_STORAGE_KEY) ?? ''
+  } catch {
+    return ''
+  }
+}
+
+// The name belongs to the person at this device: driver 1 against the computer, their own seat online.
+function applyDrivers(): void {
+  if (view.isOnlineMode) {
+    const seat = online.role === 'host' ? 0 : 1
+    session.setDriver(seat, { ...CLASSIC_DRIVERS[seat], name: playerName || CLASSIC_DRIVERS[seat].name })
+    session.setDriver(1 - seat, { ...CLASSIC_DRIVERS[1 - seat], name: opponentName || CLASSIC_DRIVERS[1 - seat].name })
+  } else if (view.isComputerMode) {
+    session.setDriver(0, { ...PLAYER_DRIVER, name: playerName || PLAYER_DRIVER.name })
+    session.setDriver(1, computerDriver)
+  }
+}
+
+function changePlayerName(name: string): void {
+  playerName = cleanDriverName(name)
+  view.showPlayerName(playerName)
+  try {
+    window.localStorage.setItem(NAME_STORAGE_KEY, playerName)
+  } catch {
+    // Without storage the name still holds until the page is closed.
+  }
+  applyDrivers()
+  online.send({ type: 'name', name: playerName })
+  render()
+}
 
 function stopReplay(): void {
   if (replayTimer !== null) window.clearInterval(replayTimer)
@@ -124,6 +162,9 @@ function startRace(track: Track, playerCount: number): void {
   stopComputerTurn()
   view.setTrackId(track.id)
   session.startNewRace(playerCount, track)
+  // The computer drives as a different classic driver, picked by chance, in every race.
+  computerDriver = CLASSIC_DRIVERS[Math.floor(Math.random() * CLASSIC_DRIVERS.length)]
+  applyDrivers()
   render()
 }
 
@@ -155,14 +196,22 @@ function startOnlineRace(): void {
   // An invite that is already out stays valid: the circuit is only sent once the guest has connected.
   if (online.role === 'host' && ['preparing', 'invite', 'connecting'].includes(online.stage)) return
   replyRejected = false
+  opponentName = ''
   void online.host()
 }
 
 function handleOnlineConnected(): void {
+  online.send({ type: 'name', name: playerName })
   if (online.role === 'host') startOnlineRace()
 }
 
 function handleOnlineMessage(message: OnlineMessage): void {
+  if (message.type === 'name') {
+    opponentName = message.name
+    applyDrivers()
+    render()
+    return
+  }
   if (message.type === 'new-race') {
     const track = TRACKS.find(({ id }) => id === message.trackId)
     if (online.role === 'guest' && track) startConnectedRace(track, message.race)
@@ -192,9 +241,10 @@ async function handleLinkSignal(): Promise<void> {
 
   if (signal.kind === 'join') {
     relayNotice = null
+    opponentName = ''
     view.showOnlineMode()
-    startRace(getTrack(view.trackId), 2)
     void online.join(signal)
+    startRace(getTrack(view.trackId), 2)
     return
   }
   if (await online.acceptReply(text)) return
@@ -298,7 +348,9 @@ view.bind({
   onSubmitReply(text) {
     void submitReply(text)
   },
+  onChangeName: changePlayerName,
 })
+view.showPlayerName(playerName)
 
 window.addEventListener('hashchange', () => void handleLinkSignal())
 // Closing the tab ends the connection at once, so the other player is not left waiting.

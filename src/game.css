@@ -60,11 +60,13 @@ body {
 .eyebrow { margin: 0 0 8px; color: #64766e; }
 h1 { margin: 0; font-size: clamp(30px, 4vw, 44px); line-height: 1; font-weight: 600; }
 h1 em { color: #398273; font-style: normal; }
-.race-setup { display: flex; align-items: center; gap: 9px; }
+.race-setup { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 9px; }
 .setup-field { display: flex; align-items: center; gap: 7px; }
 .setup-field[hidden] { display: none; }
 .race-setup label { color: #71817a; }
 .race-setup select { width: 62px; height: 39px; padding: 0 9px; border: 1px solid #c6d1c8; border-radius: 3px; color: var(--ink); background: var(--paper); font-family: var(--mono); }
+.race-setup input { width: 132px; height: 39px; padding: 0 9px; border: 1px solid #c6d1c8; border-radius: 3px; color: var(--ink); background: var(--paper); font-family: var(--mono); text-transform: uppercase; }
+.race-setup input::placeholder { color: #9aa79f; }
 .track-field select { width: 142px; }
 .mode-field select { width: 136px; }
 .new-race { height: 39px; padding: 0 14px; border: 0; border-radius: 3px; color: #f7f8ef; background: var(--forest); cursor: pointer; font-size: 13px; font-weight: 600; transition: background .16s ease, transform .16s ease; }
@@ -195,8 +197,8 @@ button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-v
   h1 { font-size: 34px; }
   .race-setup { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
   .setup-field { justify-content: space-between; }
-  .mode-field, .track-field, .player-field { grid-column: 1 / -1; }
-  .track-field select, .mode-field select { width: auto; flex: 1; }
+  .mode-field, .name-field, .track-field, .player-field { grid-column: 1 / -1; }
+  .track-field select, .mode-field select, .name-field input { width: auto; flex: 1; }
   .player-field { justify-content: flex-start; }
   .player-field select { width: 90px; }
   .new-race, .replay-open { width: 100%; }

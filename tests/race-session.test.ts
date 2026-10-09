@@ -72,6 +72,23 @@ test('replay frames preserve the initial grid after later moves', () => {
   assert.equal(session.replayFrames.length, 2)
 })
 
+test('a car can be given another driver, whose name is reduced to plain text', () => {
+  const session = new RaceSession(2, oval)
+  session.selectPoint({ x: 4, y: 11 })
+  session.selectPoint({ x: 8, y: 11 })
+  assert.deepEqual(session.state.racers.map(({ name }) => name), ['SENNA', 'PROST'])
+
+  session.setDriver(1, { name: '  flo <b>schmidt</b> the very fast ', color: '#123456' })
+  assert.equal(session.state.racers[1].name, 'FLO BSCHMIDT')
+  assert.equal(session.state.racers[1].color, '#123456')
+  assert.equal(session.replayFrames[0].racers[1].name, 'FLO BSCHMIDT')
+  assert.equal(session.replayFrames[0].racers[1].color, '#123456')
+  assert.equal(session.state.racers[0].name, 'SENNA')
+
+  session.setDriver(1, { name: ' <> ', color: '#654321' })
+  assert.equal(session.state.racers[1].name, 'FLO BSCHMIDT')
+  assert.equal(session.state.racers[1].color, '#654321')
+})
 
 test('reversing over the start line and back does not count as a lap', () => {
   const session = new RaceSession(2, oval)

@@ -40,6 +40,8 @@ Choose the mode in the menu above the board. Switching mode starts a new race.
 - **Online** – two people race each other live from two different computers. See [Playing online](#playing-online).
 - **Championship** – beat the computer on all eleven circuits in order, starting at the Red Bull Ring and ending at Suzuka. A win unlocks the next circuit; a loss means you race the same one again, as often as you need. Progress isn't saved, so reloading the page or pressing "New race" starts the championship over.
 
+The four cars carry the names and colours of classic drivers: Senna, Prost, Schumacher and Clark. Against the computer you are "PlayerOne", and the computer drives as one of the four, picked at random for every race. Against the computer and online you can type your own name into the **Name** field; your opponent online sees it too.
+
 Every race can be replayed move by move, during the race or when it's over.
 
 ### Playing online
