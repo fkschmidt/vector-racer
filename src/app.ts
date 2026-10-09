@@ -1,6 +1,9 @@
 import './game.css'
 import { chooseComputerMove } from './computer-player.ts'
 import { GameView } from './game-view.ts'
+import type { OnlineMessage } from './online-connection.ts'
+import { decodeSignal } from './online-link.ts'
+import { deliverReply, OnlineRace } from './online-race.ts'
 import { RaceSession } from './race-session.ts'
 import { getTrack, TRACKS, type Point, type Track } from './tracks.ts'
 import { WorldCup } from './world-cup.ts'
@@ -16,6 +19,16 @@ let replayIndex = 0
 let replayTimer: number | null = null
 let computerThinking = false
 let computerTimer: number | null = null
+const online = new OnlineRace({
+  onChange: render,
+  onConnected: handleOnlineConnected,
+  onMessage: handleOnlineMessage,
+})
+// Both players count races and selections the same way, so a message that is out of step can be told apart.
+let onlineRaceNumber = 0
+let onlineTurn = 0
+let replyRejected = false
+let relayNotice: 'relayed' | 'relay-failed' | null = null
 
 function stopReplay(): void {
   if (replayTimer !== null) window.clearInterval(replayTimer)
@@ -36,6 +49,9 @@ function render(): void {
       nextTrack: worldCup.nextTrack?.name ?? null,
     }
     : null
+  const onlineDisplay = view.isOnlineMode
+    ? { stage: online.stage, role: online.role, link: online.link, replyRejected }
+    : relayNotice ? { stage: relayNotice, role: online.role, link: null, replyRejected: false } : null
 
   view.render(
     session.state,
@@ -46,6 +62,7 @@ function render(): void {
     view.isComputerMode ? 2 : null,
     computerThinking,
     championship,
+    onlineDisplay,
   )
 }
 
@@ -110,7 +127,88 @@ function startRace(track: Track, playerCount: number): void {
   render()
 }
 
+function hasOnlineTurn(): boolean {
+  const state = session.state
+  const seat = online.role === 'host' ? 0 : 1
+  return online.stage === 'connected' && (
+    (state.phase === 'setup' && state.setupIndex === seat)
+    || (state.phase === 'racing' && state.currentIndex === seat)
+  )
+}
+
+function startConnectedRace(track: Track, raceNumber: number): void {
+  onlineRaceNumber = raceNumber
+  onlineTurn = 0
+  startRace(track, 2)
+}
+
+function startOnlineRace(): void {
+  // The host starts every race; the guest follows.
+  if (online.role === 'guest' && ['preparing', 'reply', 'connected'].includes(online.stage)) return
+  const track = getTrack(view.trackId)
+  if (online.role === 'host' && online.stage === 'connected') {
+    startConnectedRace(track, onlineRaceNumber + 1)
+    online.send({ type: 'new-race', race: onlineRaceNumber, trackId: track.id })
+    return
+  }
+  startRace(track, 2)
+  // An invite that is already out stays valid: the circuit is only sent once the guest has connected.
+  if (online.role === 'host' && ['preparing', 'invite', 'connecting'].includes(online.stage)) return
+  replyRejected = false
+  void online.host()
+}
+
+function handleOnlineConnected(): void {
+  if (online.role === 'host') startOnlineRace()
+}
+
+function handleOnlineMessage(message: OnlineMessage): void {
+  if (message.type === 'new-race') {
+    const track = TRACKS.find(({ id }) => id === message.trackId)
+    if (online.role === 'guest' && track) startConnectedRace(track, message.race)
+    return
+  }
+  // A move for an abandoned race can still be on its way when the host starts the next one.
+  if (message.race !== onlineRaceNumber) return
+  if (message.turn !== onlineTurn || hasOnlineTurn() || !session.selectPoint(message.point)) {
+    online.fail()
+    return
+  }
+  onlineTurn += 1
+  render()
+}
+
+async function submitReply(text: string): Promise<void> {
+  replyRejected = !(await online.acceptReply(text))
+  render()
+}
+
+// Invite and reply links arrive in the address bar, either on load or pasted into an open tab.
+async function handleLinkSignal(): Promise<void> {
+  const text = window.location.hash
+  const signal = await decodeSignal(text)
+  if (!signal) return
+  window.history.replaceState(null, '', window.location.pathname + window.location.search)
+
+  if (signal.kind === 'join') {
+    relayNotice = null
+    view.showOnlineMode()
+    startRace(getTrack(view.trackId), 2)
+    void online.join(signal)
+    return
+  }
+  if (await online.acceptReply(text)) return
+  relayNotice = await deliverReply(text, signal.id) ? 'relayed' : 'relay-failed'
+  render()
+}
+
 function startNewRace(): void {
+  relayNotice = null
+  if (view.isOnlineMode) {
+    startOnlineRace()
+    return
+  }
+  online.leave()
   if (view.isChampionshipMode) {
     worldCup.restart()
     startRace(worldCup.currentTrack, 2)
@@ -171,7 +269,12 @@ function toggleReplay(): void {
 
 view.bind({
   onSelectPoint(point) {
+    if (view.isOnlineMode && !hasOnlineTurn()) return
     if (!replayMode && !computerThinking && session.selectPoint(point)) {
+      if (view.isOnlineMode) {
+        online.send({ type: 'move', race: onlineRaceNumber, turn: onlineTurn, point })
+        onlineTurn += 1
+      }
       recordWorldCupResult()
       render()
       scheduleComputerTurn()
@@ -192,6 +295,14 @@ view.bind({
     showReplayFrame(index)
   },
   onChampionshipAction: handleChampionshipAction,
+  onSubmitReply(text) {
+    void submitReply(text)
+  },
 })
 
+window.addEventListener('hashchange', () => void handleLinkSignal())
+// Closing the tab ends the connection at once, so the other player is not left waiting.
+window.addEventListener('pagehide', () => online.leave())
+
 render()
+void handleLinkSignal()

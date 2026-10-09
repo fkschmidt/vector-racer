@@ -18,7 +18,7 @@
 }
 
 * { box-sizing: border-box; }
-button, select { font: inherit; }
+button, select, input { font: inherit; }
 
 body {
   min-width: 320px;
@@ -66,6 +66,7 @@ h1 em { color: #398273; font-style: normal; }
 .race-setup label { color: #71817a; }
 .race-setup select { width: 62px; height: 39px; padding: 0 9px; border: 1px solid #c6d1c8; border-radius: 3px; color: var(--ink); background: var(--paper); font-family: var(--mono); }
 .track-field select { width: 142px; }
+.mode-field select { width: 136px; }
 .new-race { height: 39px; padding: 0 14px; border: 0; border-radius: 3px; color: #f7f8ef; background: var(--forest); cursor: pointer; font-size: 13px; font-weight: 600; transition: background .16s ease, transform .16s ease; }
 .new-race span { font-size: 18px; vertical-align: -1px; margin-right: 5px; }
 .new-race:hover { background: #23665a; transform: translateY(-1px); }
@@ -73,7 +74,7 @@ h1 em { color: #398273; font-style: normal; }
 .replay-open:hover:not(:disabled) { background: #fff; }
 .replay-open:disabled { opacity: .45; cursor: not-allowed; }
 .new-race:disabled { opacity: .55; cursor: not-allowed; transform: none; }
-button:focus-visible, select:focus-visible, summary:focus-visible, .move-choice:focus-visible { outline: 3px solid #d5e75f; outline-offset: 3px; }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible, .move-choice:focus-visible { outline: 3px solid #d5e75f; outline-offset: 3px; }
 
 .race-layout { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 26px; align-items: stretch; }
 .board-column { min-width: 0; }
@@ -93,6 +94,13 @@ button:focus-visible, select:focus-visible, summary:focus-visible, .move-choice:
 .championship-panel[hidden] { display: none; }
 .championship-panel p { margin: 0; font-size: 12px; line-height: 1.4; }
 .championship-panel button { flex: 0 0 auto; }
+.online-panel { display: grid; gap: 9px; margin: -2px 0 12px; padding: 12px 13px; border-left: 4px solid #91aa49; color: var(--ink); background: #edf2df; }
+.online-panel[hidden], .online-panel [hidden] { display: none; }
+.online-panel p { margin: 0; font-size: 12px; line-height: 1.4; }
+.online-row { display: flex; gap: 8px; }
+.online-row input { min-width: 0; flex: 1; height: 39px; padding: 0 10px; border: 1px solid #c6d1c8; border-radius: 3px; color: var(--ink); background: var(--paper); font: 11px var(--mono); }
+.online-row button { flex: 0 0 auto; min-width: 96px; }
+.online-panel .online-error { color: #a63e30; font-weight: 600; }
 .board-frame { overflow: hidden; padding: 10px; border: 1px solid #d4ddd4; border-radius: 4px; background: var(--paper); box-shadow: 0 9px 28px rgba(32, 63, 52, .07); }
 #race-board { display: block; width: 100%; height: auto; aspect-ratio: 34 / 23; overflow: visible; touch-action: manipulation; }
 .board-ground { fill: #dce9dc; }
@@ -184,10 +192,11 @@ button:focus-visible, select:focus-visible, summary:focus-visible, .move-choice:
   .race-setup { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 9px; }
   .setup-field { justify-content: space-between; }
   .mode-field, .track-field, .player-field { grid-column: 1 / -1; }
-  .track-field select { width: auto; flex: 1; }
+  .track-field select, .mode-field select { width: auto; flex: 1; }
   .player-field { justify-content: flex-start; }
   .player-field select { width: 90px; }
   .new-race, .replay-open { width: 100%; }
+  .online-row button { width: auto; }
   .replay-open { padding: 0 10px; }
   .race-layout { grid-template-columns: minmax(0, 1fr); gap: 20px; }
   .board-heading { height: 34px; font-size: 9px; }

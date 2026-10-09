@@ -1,5 +1,6 @@
 import { BOARD, TRACKS, getRaceDirection, type Point } from './tracks.ts'
 import type { Candidate, Racer } from './game.ts'
+import type { OnlineRole, OnlineStage } from './online-race.ts'
 import type { RacePhase, RaceState, ReplayFrame } from './race-session.ts'
 import type { WorldCupStage } from './world-cup.ts'
 
@@ -12,6 +13,14 @@ export type ChampionshipDisplay = {
   nextTrack: string | null
 } | null
 
+// 'relayed' and 'relay-failed' report on a reply link opened in a tab that is not running the race it belongs to.
+export type OnlineDisplay = {
+  stage: OnlineStage | 'relayed' | 'relay-failed'
+  role: OnlineRole
+  link: string | null
+  replyRejected: boolean
+} | null
+
 export type ViewActions = {
   onSelectPoint(point: Point): void
   onNewRace(): void
@@ -21,14 +30,17 @@ export type ViewActions = {
   onToggleReplay(): void
   onSeekReplay(index: number): void
   onChampionshipAction(): void
+  onSubmitReply(text: string): void
 }
 
 const BOARD_EDGE_INSET = .3
+const COPIED_NOTICE_TIME = 1600
 
 export class GameView {
   private readonly board: SVGSVGElement
   private readonly modeSelect: HTMLSelectElement
   private readonly modeLabel: HTMLSpanElement
+  private readonly sessionStatus: HTMLSpanElement
   private readonly trackSelect: HTMLSelectElement
   private readonly trackField: HTMLDivElement
   private readonly playerCountField: HTMLDivElement
@@ -48,6 +60,15 @@ export class GameView {
   private readonly championshipPanel: HTMLDivElement
   private readonly championshipSummary: HTMLParagraphElement
   private readonly championshipButton: HTMLButtonElement
+  private readonly onlinePanel: HTMLDivElement
+  private readonly onlineSummary: HTMLParagraphElement
+  private readonly onlineLinkRow: HTMLDivElement
+  private readonly onlineLink: HTMLInputElement
+  private readonly onlineCopy: HTMLButtonElement
+  private readonly onlineReplyHint: HTMLParagraphElement
+  private readonly onlineReplyForm: HTMLFormElement
+  private readonly onlineReply: HTMLInputElement
+  private readonly onlineError: HTMLParagraphElement
   private readonly driverList: HTMLDivElement
   private readonly eventFeed: HTMLOListElement
   private readonly feedCount: HTMLSpanElement
@@ -62,6 +83,7 @@ export class GameView {
   private readonly replayCount: HTMLOutputElement
   private readonly newRaceButton: HTMLButtonElement
   private actions: ViewActions | null = null
+  private copiedTimer: number | null = null
 
   constructor(root: HTMLDivElement) {
     const trackOptions = TRACKS.map((track) => `<option value="${track.id}">${track.name}</option>`).join('')
@@ -72,13 +94,13 @@ export class GameView {
           <span class="brand-mark" aria-hidden="true"><i></i><i></i><i></i></span>
           <span>VECTOR<span class="brand-light">RACER</span></span>
         </a>
-        <div class="topbar-status"><span class="live-dot"></span> LOCAL SESSION</div>
+        <div class="topbar-status"><span class="live-dot"></span> <span id="session-status">LOCAL SESSION</span></div>
       </header>
       <main class="page-shell">
         <section class="intro-row">
           <div><p class="eyebrow">PAPER GRID / CIRCUIT 01</p><h1>Make your <em>move.</em></h1></div>
           <div class="race-setup">
-            <div class="setup-field mode-field"><label for="game-mode">MODE</label><select id="game-mode" aria-label="Game mode"><option value="local">LOCAL</option><option value="cpu">VS CPU</option><option value="championship">CHAMPIONSHIP</option></select></div>
+            <div class="setup-field mode-field"><label for="game-mode">MODE</label><select id="game-mode" aria-label="Game mode"><option value="local">LOCAL</option><option value="cpu">VS CPU</option><option value="championship">CHAMPIONSHIP</option><option value="online">ONLINE</option></select></div>
             <div class="setup-field track-field"><label for="track-select">MAP</label><select id="track-select" aria-label="Choose race map">${trackOptions}</select></div>
             <div class="setup-field player-field"><label for="player-count">DRIVERS</label><select id="player-count" aria-label="Number of drivers"><option value="2" selected>02</option><option value="3">03</option><option value="4">04</option></select></div>
             <button id="new-race" class="new-race" type="button"><span aria-hidden="true">↻</span> New race</button>
@@ -102,6 +124,19 @@ export class GameView {
             <div id="championship-panel" class="championship-panel" hidden>
               <p id="championship-summary"></p>
               <button id="championship-action" class="new-race" type="button"></button>
+            </div>
+            <div id="online-panel" class="online-panel" hidden>
+              <p id="online-summary"></p>
+              <div id="online-link-row" class="online-row">
+                <input id="online-link" type="text" readonly aria-label="Link to send" />
+                <button id="online-copy" class="new-race" type="button">Copy link</button>
+              </div>
+              <p id="online-reply-hint">Your friend sends a reply link back. Open it in this browser, or paste it here.</p>
+              <form id="online-reply-form" class="online-row">
+                <input id="online-reply" type="text" placeholder="Paste the reply link" aria-label="Reply link" autocomplete="off" />
+                <button class="replay-open" type="submit">Connect</button>
+              </form>
+              <p id="online-error" class="online-error" role="alert">That is not the reply to this invite.</p>
             </div>
             <div class="board-frame">
               <svg id="race-board" viewBox="0 0 ${BOARD.width} ${BOARD.height}" role="img" aria-label="Grid race track. Select a destination marker to move."></svg>
@@ -151,6 +186,7 @@ export class GameView {
     this.board = root.querySelector<SVGSVGElement>('#race-board')!
     this.modeSelect = root.querySelector<HTMLSelectElement>('#game-mode')!
     this.modeLabel = root.querySelector<HTMLSpanElement>('#mode-label')!
+    this.sessionStatus = root.querySelector<HTMLSpanElement>('#session-status')!
     this.trackSelect = root.querySelector<HTMLSelectElement>('#track-select')!
     this.trackField = root.querySelector<HTMLDivElement>('.track-field')!
     this.playerCountField = root.querySelector<HTMLDivElement>('.player-field')!
@@ -170,6 +206,15 @@ export class GameView {
     this.championshipPanel = root.querySelector<HTMLDivElement>('#championship-panel')!
     this.championshipSummary = root.querySelector<HTMLParagraphElement>('#championship-summary')!
     this.championshipButton = root.querySelector<HTMLButtonElement>('#championship-action')!
+    this.onlinePanel = root.querySelector<HTMLDivElement>('#online-panel')!
+    this.onlineSummary = root.querySelector<HTMLParagraphElement>('#online-summary')!
+    this.onlineLinkRow = root.querySelector<HTMLDivElement>('#online-link-row')!
+    this.onlineLink = root.querySelector<HTMLInputElement>('#online-link')!
+    this.onlineCopy = root.querySelector<HTMLButtonElement>('#online-copy')!
+    this.onlineReplyHint = root.querySelector<HTMLParagraphElement>('#online-reply-hint')!
+    this.onlineReplyForm = root.querySelector<HTMLFormElement>('#online-reply-form')!
+    this.onlineReply = root.querySelector<HTMLInputElement>('#online-reply')!
+    this.onlineError = root.querySelector<HTMLParagraphElement>('#online-error')!
     this.driverList = root.querySelector<HTMLDivElement>('#driver-list')!
     this.eventFeed = root.querySelector<HTMLOListElement>('#event-feed')!
     this.feedCount = root.querySelector<HTMLSpanElement>('#feed-count')!
@@ -190,7 +235,15 @@ export class GameView {
   }
 
   get isComputerMode(): boolean {
-    return this.modeSelect.value !== 'local'
+    return this.modeSelect.value === 'cpu' || this.isChampionshipMode
+  }
+
+  get isOnlineMode(): boolean {
+    return this.modeSelect.value === 'online'
+  }
+
+  showOnlineMode(): void {
+    this.modeSelect.value = 'online'
   }
 
   get isChampionshipMode(): boolean {
@@ -220,6 +273,12 @@ export class GameView {
     this.replayToggle.addEventListener('click', actions.onToggleReplay)
     this.replayRange.addEventListener('input', () => actions.onSeekReplay(Number(this.replayRange.value)))
     this.championshipButton.addEventListener('click', actions.onChampionshipAction)
+    this.onlineCopy.addEventListener('click', this.copyOnlineLink)
+    this.onlineLink.addEventListener('focus', () => this.onlineLink.select())
+    this.onlineReplyForm.addEventListener('submit', (event) => {
+      event.preventDefault()
+      if (this.onlineReply.value.trim()) actions.onSubmitReply(this.onlineReply.value)
+    })
     document.addEventListener('keydown', (event) => {
       if (event.key === 'Escape') actions.onCloseReplay()
     })
@@ -234,6 +293,7 @@ export class GameView {
     computerPlayerId: number | null = null,
     computerThinking = false,
     championship: ChampionshipDisplay = null,
+    online: OnlineDisplay = null,
   ): void {
     const frame = replay?.frame
     const racers = frame?.racers ?? state.racers
@@ -246,11 +306,18 @@ export class GameView {
     const setupRacer = state.racers[state.setupIndex]
     const racer = phase === 'setup' ? setupRacer : racers[currentIndex]
     const isComputerTurn = racer.id === computerPlayerId
+    const onlineRace = this.isOnlineMode ? online : null
+    const localRacerId = onlineRace ? onlineRace.role === 'host' ? 1 : 2 : null
+    const onlineConnected = onlineRace?.stage === 'connected'
+    // In an online race the board only takes input on this player's own turn.
+    const awaitingOpponent = onlineRace !== null && (!onlineConnected || racer.id !== localRacerId)
 
     this.trackName.textContent = state.track.name
     const raceDirection = getRaceDirection(state.track)
     const directionName = { clockwise: 'CLOCKWISE', counterclockwise: 'COUNTERCLOCKWISE', 'figure-eight': 'FIGURE EIGHT' }[raceDirection]
-    this.modeLabel.textContent = this.isChampionshipMode ? 'WORLD CUP' : this.isComputerMode ? 'VS COMPUTER' : 'LOCAL MULTIPLAYER'
+    this.modeLabel.textContent = this.isChampionshipMode
+      ? 'WORLD CUP'
+      : this.isComputerMode ? 'VS COMPUTER' : this.isOnlineMode ? 'ONLINE RACE' : 'LOCAL MULTIPLAYER'
     this.trackField.hidden = this.isChampionshipMode
     this.directionIcon.textContent = { clockwise: '↻', counterclockwise: '↺', 'figure-eight': '∞' }[raceDirection]
     this.directionLabel.textContent = directionName
@@ -323,12 +390,103 @@ export class GameView {
       this.championshipButton.disabled = computerThinking
     }
 
+    if (onlineRace && !replay) this.describeOnlineTurn(onlineRace.stage, racer, winner, phase, localRacerId)
+    this.renderOnlinePanel(online, replay !== null)
+
     this.crashLegend.hidden = phase === 'setup'
     this.feedCount.textContent = this.formatNumber(events.length)
     this.eventFeed.innerHTML = events.map((event) => `<li><span>R${this.formatNumber(event.round)}</span><p>${event.text}</p></li>`).join('')
-    this.renderDrivers(state, racers, currentIndex, phase, computerPlayerId)
-    this.renderBoard(state, racers, phase, computerThinking ? [] : candidates, replay !== null)
+    this.renderDrivers(state, racers, currentIndex, phase, computerPlayerId, onlineConnected ? localRacerId : null)
+    this.renderBoard(state, racers, phase, computerThinking || awaitingOpponent ? [] : candidates, replay !== null)
     this.updateReplayControls(state, replay, replayFrameCount, replayPlaying, computerThinking)
+    // The host chooses the circuit and starts each race, so the guest's controls stay locked while a race is on.
+    if (onlineRace?.role === 'guest' && ['preparing', 'reply', 'connected'].includes(onlineRace.stage)) {
+      this.trackSelect.disabled = true
+      this.newRaceButton.disabled = true
+    }
+  }
+
+  private describeOnlineTurn(
+    stage: NonNullable<OnlineDisplay>['stage'],
+    racer: Racer,
+    winner: Racer | null,
+    phase: RacePhase,
+    localRacerId: number | null,
+  ): void {
+    const swatch = `<span class="active-swatch" style="--driver-color:${racer.color}"></span>`
+    if (stage !== 'connected') {
+      const offline = stage === 'lost' || stage === 'failed'
+      const status = stage === 'lost' ? 'CONNECTION LOST' : stage === 'failed' ? 'NO CONNECTION' : 'WAITING FOR OPPONENT'
+      this.turnBannerLabel.textContent = 'ONLINE RACE'
+      this.turnBannerName.textContent = status
+      this.turnBannerCaption.textContent = offline ? 'Race stopped' : 'Not connected yet'
+      this.activeDriver.innerHTML = `${swatch}<div><span class="active-kicker">ONLINE RACE</span><strong>${status}</strong></div>`
+      this.turnPrompt.textContent = offline ? 'The race cannot continue.' : 'The race starts once both browsers are connected.'
+      return
+    }
+    if (winner) {
+      const result = winner.id === localRacerId ? 'YOU WIN' : 'YOU LOSE'
+      this.turnBannerLabel.textContent = `CHECKERED FLAG · ${result}`
+      return
+    }
+    if (racer.id === localRacerId) {
+      this.turnBannerLabel.textContent = `YOUR TURN · ${this.turnBannerLabel.textContent}`
+      return
+    }
+    this.turnBannerLabel.textContent = 'OPPONENT\'S TURN'
+    this.turnBannerName.textContent = phase === 'setup' ? `${racer.name} PICKS A START` : `${racer.name} TO MOVE`
+    this.turnBannerCaption.textContent = 'Waiting for their move'
+    this.activeDriver.innerHTML = `${swatch}<div><span class="active-kicker">ONLINE OPPONENT</span><strong>WAITING</strong></div>`
+    this.turnPrompt.textContent = 'Your opponent is choosing.'
+  }
+
+  private renderOnlinePanel(online: OnlineDisplay, replaying: boolean): void {
+    const stage = online?.stage ?? 'idle'
+    this.sessionStatus.textContent = !this.isOnlineMode
+      ? 'LOCAL SESSION'
+      : stage === 'connected' ? 'ONLINE · CONNECTED' : stage === 'lost' || stage === 'failed' ? 'ONLINE · OFFLINE' : 'ONLINE · WAITING'
+
+    const summary = online === null ? '' : {
+      idle: '',
+      preparing: online.role === 'host' ? 'Preparing your invite link…' : 'Joining the race…',
+      invite: 'Send this invite link to your friend, and keep this tab open.',
+      reply: 'Send this reply link back to your friend, and keep this tab open. The race starts as soon as they open it.',
+      connecting: 'Reply received. Connecting…',
+      connected: '',
+      lost: 'The connection to your opponent was lost. Press "New race" to create a new invite.',
+      failed: 'The two browsers could not reach each other. Some networks block direct connections. Press "New race" to try again with a new invite.',
+      relayed: 'Reply delivered. The race is in your other tab, so you can close this one.',
+      'relay-failed': 'This is a reply link, but the race it belongs to is not open in this browser. Open it in the browser where you created the invite, or copy the link and paste it there.',
+    }[stage]
+
+    this.onlinePanel.hidden = summary === '' || replaying
+    this.onlineSummary.textContent = summary
+    const link = online?.link ?? null
+    this.onlineLinkRow.hidden = link === null
+    if (this.onlineLink.value !== (link ?? '')) {
+      this.onlineLink.value = link ?? ''
+      this.showCopied(false)
+    }
+    this.onlineReplyHint.hidden = stage !== 'invite'
+    this.onlineReplyForm.hidden = stage !== 'invite'
+    if (stage !== 'invite') this.onlineReply.value = ''
+    this.onlineError.hidden = stage !== 'invite' || !online?.replyRejected
+  }
+
+  private copyOnlineLink = async (): Promise<void> => {
+    try {
+      await navigator.clipboard.writeText(this.onlineLink.value)
+      this.showCopied(true)
+    } catch {
+      // Without clipboard access the link is selected, ready to be copied by hand.
+      this.onlineLink.select()
+    }
+  }
+
+  private showCopied(copied: boolean): void {
+    if (this.copiedTimer !== null) window.clearTimeout(this.copiedTimer)
+    this.copiedTimer = copied ? window.setTimeout(() => this.showCopied(false), COPIED_NOTICE_TIME) : null
+    this.onlineCopy.textContent = copied ? 'Copied' : 'Copy link'
   }
 
   private handleBoardClick = (event: MouseEvent): void => {
@@ -368,6 +526,7 @@ export class GameView {
     currentIndex: number,
     phase: RacePhase,
     computerPlayerId: number | null,
+    localRacerId: number | null,
   ): void {
     this.driverList.innerHTML = racers.map((racer, index) => {
       const isCurrent = phase === 'setup' ? index === state.setupIndex : index === currentIndex && phase !== 'finished'
@@ -382,7 +541,9 @@ export class GameView {
             ? '<span class="driver-state active-state">MOVING NOW</span>'
             : `<span class="driver-state">${racer.trail.length - 1} MOVES</span>`
 
-      const displayName = racer.id === computerPlayerId ? `${racer.name} · CPU` : racer.name
+      const displayName = racer.id === computerPlayerId
+        ? `${racer.name} · CPU`
+        : racer.id === localRacerId ? `${racer.name} · YOU` : racer.name
       return `<div class="driver-row ${isCurrent ? 'driver-current' : ''}" style="--driver-color:${racer.color}">
         <span class="driver-marker">${this.formatNumber(racer.id)}</span><span class="driver-name">${displayName}${status}</span>
         <span class="driver-speed"><span>${vector}</span><b>${this.formatSpeed(racer)}</b></span></div>`
@@ -475,8 +636,8 @@ export class GameView {
     this.modeSelect.disabled = replaying || computerThinking
     this.trackSelect.disabled = replaying
     this.trackField.hidden = this.isChampionshipMode
-    this.playerCountSelect.disabled = replaying || this.isComputerMode
-    this.playerCountField.hidden = this.isComputerMode
+    this.playerCountSelect.disabled = replaying || this.isComputerMode || this.isOnlineMode
+    this.playerCountField.hidden = this.isComputerMode || this.isOnlineMode
     this.newRaceButton.disabled = replaying
     this.replayRange.max = String(Math.max(0, replayFrameCount - 1))
     this.replayRange.value = String(replay?.index ?? 0)

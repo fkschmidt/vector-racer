@@ -33,9 +33,27 @@ Choose the mode in the menu above the board. Switching mode starts a new race.
 
 - **Local** – two to four people take turns on one device. You pick the circuit and how many drivers.
 - **VS CPU** – you against the computer on a circuit of your choice. You pick your start position first, then the computer picks its own.
+- **Online** – two people race each other live from two different computers. See [Playing online](#playing-online).
 - **Championship** – beat the computer on all eleven circuits in order, starting at the Red Bull Ring and ending at Suzuka. A win unlocks the next circuit; a loss means you race the same one again, as often as you need. Progress isn't saved, so reloading the page or pressing "New race" starts the championship over.
 
 Every race can be replayed move by move, during the race or when it's over.
+
+### Playing online
+
+The two browsers talk to each other directly. To find each other they need one link in each direction, which you send by any messenger or mail:
+
+1. **You** choose the mode **Online**. The game shows an invite link. Send it to your friend and keep the tab open.
+2. **Your friend** opens the invite link. Their game shows a reply link, which they send back to you. They keep their tab open too.
+3. **You** open the reply link in the same browser, or paste it into the field under your invite link. The race starts.
+
+The player who created the invite is driver 1, chooses the circuit and starts each new race. No further links are needed for the rest of the session.
+
+Good to know:
+
+- Reloading or closing the tab ends the connection, and the race with it. Press "New race" to create a new invite.
+- A reply link stays usable for about a quarter of an hour.
+- Some company and mobile networks block direct connections between browsers. If the game reports that the browsers could not reach each other, try a different network.
+- Tested in Chrome. Other current browsers should work but have not been tried.
 
 ## Circuits
 
@@ -65,6 +83,8 @@ This was deliberately the naive way of building it. There was no design document
 - one requirement: it has to run from GitHub with no other servers.
 
 That requirement is why the whole game runs in the browser. There is no backend, no database and no accounts; the build is a handful of static files, served by GitHub Pages. It is also why championship progress is not saved anywhere.
+
+It also shaped online play. With no server to introduce the two browsers, the players pass an invite link and a reply link between them, and the moves then travel directly from browser to browser. One outside service is involved: when a link is created, the browser asks a public address-lookup server (a STUN server run by Google) for its own internet address. No account is needed and no race data passes through it.
 
 How it went from there:
 
@@ -105,6 +125,9 @@ To publish a copy of your own, fork the repository, open **Settings → Pages**,
 | `src/race-session.ts` | One race: turn order, penalties, replay |
 | `src/computer-player.ts` | The computer opponent |
 | `src/world-cup.ts` | Championship progression |
+| `src/online-link.ts` | Packing connection details into invite and reply links |
+| `src/online-connection.ts` | The direct browser-to-browser connection and the messages sent over it |
+| `src/online-race.ts` | Setting up an online race: invite, reply, connection state |
 | `src/game-view.ts`, `src/app.ts`, `src/game.css` | The interface |
 | `tests/` | Automated tests, including a full computer-driven lap of every circuit |
 

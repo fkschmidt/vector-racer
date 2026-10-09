@@ -144,6 +144,24 @@ The player chooses a mode, a circuit and a number of drivers before the race. Ch
 - While the computer is deciding, the person cannot make a move, and the mode and replay controls are locked. The computer takes about half a second per decision so its moves can be followed.
 - If the computer is serving a crash penalty, its turns are skipped as for any other player and the person moves again.
 
+### Online
+
+Two people race each other from two devices. The browsers are connected directly to each other (a WebRTC data channel); no server relays the race.
+
+- Exactly two drivers. The player who creates the race, the host, is player 1. The player who joins, the guest, is player 2. The number of drivers cannot be changed.
+- **Connecting** takes one link in each direction, which the players send to each other by any means:
+  1. Choosing the online mode makes the host's game create an invite link and show it.
+  2. Opening the invite link puts the guest's game in online mode and makes it create a reply link and show it.
+  3. The host opens the reply link in the same browser, or pastes it into a field shown with the invite. A reply link opened in a new tab is handed to the tab that holds the invite, and the new tab says so. A reply that does not belong to the open invite is refused.
+- Each link carries the connection details of the browser that made it, in the part of the address after `#`. To learn its own internet address, a browser asks a public address-lookup (STUN) server while making a link.
+- Until the browsers are connected, the board takes no input.
+- When the connection is made, the host's game starts a race on the circuit the host has selected and tells the guest's game to start the same one.
+- The host chooses the circuit and starts each new race. Changing the circuit before the guest has connected keeps the invite valid. While joining or connected, the guest's circuit and "New race" controls are locked.
+- A player can only select a point, including a start position, on their own turn. The selection is applied on their own board and sent to the other, which applies the same selection. Both boards therefore always show the same race.
+- Each selection is sent with the number of the race and its position in the sequence of selections. A selection for a race that has since been replaced is ignored. One that is out of sequence, made out of turn or not legal ends the connection.
+- If the connection ends, the race stops where it is and cannot be resumed. Pressing "New race" creates a new invite. Closing or reloading the page ends the connection. Leaving the online mode does too.
+- Each player can open the replay on their own; it does not affect the other player. Moves that arrive during a replay are still applied.
+
 ### Championship
 
 A series of races against the computer, one per circuit, in the order listed in section 2. Each race follows the versus-computer rules, except that the circuit cannot be chosen.
