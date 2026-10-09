@@ -2,6 +2,8 @@
 
 A browser version of the classic pencil-and-paper racing game, played on eleven Formula 1 circuits.
 
+**Play it here: https://fkschmidt.github.io/vector-racer/**
+
 You don't steer the car directly. Each turn your car carries on with the speed and direction it already has, and you may nudge that by one grid square. Go too fast into a corner and you won't be able to slow down in time.
 
 ## How to play
@@ -62,7 +64,7 @@ This was deliberately the naive way of building it. There was no design document
 - a description of the game, and
 - one requirement: it has to run from GitHub with no other servers.
 
-That requirement is why the whole game runs in the browser. There is no backend, no database and no accounts; the build is a handful of static files that any static host, such as GitHub Pages, can serve. It is also why championship progress is not saved anywhere.
+That requirement is why the whole game runs in the browser. There is no backend, no database and no accounts; the build is a handful of static files, served by GitHub Pages. It is also why championship progress is not saved anywhere.
 
 How it went from there:
 
@@ -87,13 +89,11 @@ npm run build    # create a production build in dist/
 
 ## Publishing on GitHub Pages
 
-The repository includes a workflow that tests, builds and publishes the game every time `main` is pushed.
+The game is published at https://fkschmidt.github.io/vector-racer/ from the repository at https://github.com/fkschmidt/vector-racer.
 
-1. Push the repository to GitHub.
-2. In the repository settings, open **Pages** and set **Source** to **GitHub Actions**.
-3. Push to `main`, or run the "Deploy to GitHub Pages" workflow by hand.
+A workflow in the repository tests, builds and publishes the game every time `main` is pushed, so the live site always matches `main`. It can also be run by hand from the repository's **Actions** tab ("Deploy to GitHub Pages").
 
-The game then appears at `https://<user>.github.io/<repository>/`. The build uses relative paths, so it works under any repository name.
+To publish a copy of your own, fork the repository, open **Settings → Pages**, set **Source** to **GitHub Actions**, and push to `main`. The build uses relative paths, so it works under any repository name.
 
 ## Project layout
 
